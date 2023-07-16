@@ -1,5 +1,6 @@
 using Roguelite.AI.Components;
 using Roguelite.Player.Components;
+using Unity.Burst;
 using Unity.Collections;
 using Unity.Entities;
 using Unity.Mathematics;
@@ -8,8 +9,10 @@ using UnityEngine;
 
 namespace Roguelite.AI.Systems
 {
+    [BurstCompile]
     public partial struct AIBehaviourISystem : ISystem
     {
+        [BurstCompile]
         public void OnUpdate(ref SystemState state)
         {
             float dt = Time.deltaTime;
@@ -25,19 +28,15 @@ namespace Roguelite.AI.Systems
                     
                     // Collision Test 
                     foreach (var (otherTransform, otherAI) 
-                             in SystemAPI.Query<RefRW<LocalTransform>, RefRO<AIComponent>>().WithAll<AIComponent>())
+                             in SystemAPI.Query<RefRO<LocalTransform>, RefRO<AIComponent>>().WithAll<AIComponent>())
                     {
-                        float3 collisionRes = CalculateSeparationVector(transform.ValueRO.Position,
-                            aiSeek.ValueRO.Size,
-                            otherTransform.ValueRO.Position,
-                            otherAI.ValueRO.Size);
-                       
-                        Debug.Log(collisionRes);
-                        collisionRes = new float3(collisionRes.x, 0f, collisionRes.z);
-                        if (math.length(collisionRes) > 0)
+                        if (CalculateSeparationVector(transform.ValueRO.Position,
+                                aiSeek.ValueRO.Size,
+                                otherTransform.ValueRO.Position,
+                                otherAI.ValueRO.Size, out float3 collisionRes))
                         {
-                            transform.ValueRW.Position -= (collisionRes / 2f);
-                            otherTransform.ValueRW.Position += (collisionRes / 2f);
+                            if (math.length(collisionRes) > 0f)
+                                transform.ValueRW.Position -= (collisionRes * 0.5f);
                         }
                     }
                 }
@@ -45,7 +44,7 @@ namespace Roguelite.AI.Systems
         }
 
         
-        public static float3 CalculateSeparationVector(float3 sphere1Position, float sphere1Radius, float3 sphere2Position, float sphere2Radius)
+        public static bool CalculateSeparationVector(float3 sphere1Position, float sphere1Radius, float3 sphere2Position, float sphere2Radius, out float3 separation)
         {
             float3 separationVector = sphere2Position - sphere1Position;
             float distance = math.length(separationVector);
@@ -56,12 +55,12 @@ namespace Roguelite.AI.Systems
             {
                 float3 separationDirection = math.normalize(separationVector);
                 float separationDistance = sumOfRadii - distance;
-                float3 separation = separationDirection * separationDistance;
-
-                return separation;
+                separation = separationDirection * separationDistance;
+                return true;
             }
 
-            return float3.zero;
+            separation = float3.zero;
+            return false;
         }
     }
 }
